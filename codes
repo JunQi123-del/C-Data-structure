@@ -1,0 +1,1940 @@
+#include "date.h"
+#include "time.h"
+#include "vector.h"
+#include "weather.h"
+#include<iostream>
+#include <fstream>
+#include<sstream>
+#include <cmath>
+#include<map>
+#include<string>
+ 
+#include "BinarySearchTree.h"
+ 
+using namespace std;
+ 
+ 
+string FileName = "data/met_index.txt"; // enter the file name of the file here to read the file
+ 
+string OutFileName = "WindTempSolar.csv"; // enter the file name here to write to the file
+ 
+void ReadAllDataFromFile(Vector<Weather> &WeatherVec,string FileName, Bst<Weather> &WeatherTree); // used to read the record from the file and store in class Vector obj
+void PrintMenu(); // print the menu options
+float CalAvgWindSpeed(Vector<Weather> & Vec,unsigned month, unsigned year); // calculatate the average windspeed of the month and year
+float CalAvgTemp(Vector<Weather> & Vec,unsigned month, unsigned year); // calculate the average temperature of the month and year
+float CalSolarRad(Vector<Weather> &WeatherVecObj, unsigned Month, unsigned Year); // calculate the solar radiation of the month and year
+string GetMonthName(unsigned month); // get the string name of the month
+bool CheckChoice(int &I_Choice, string S_choice); // error checking of user input of the Choice
+bool CheckYear(unsigned &Year, string S_Year);// error checking of user input of the year
+bool CheckMonth(unsigned &Month, string S_Month);// error checking of user input of the month
+void PrintYearRequest(); // prompt for the year
+void PrintMonthRequest(); // prompt for the month
+void Option1(Bst<Weather> &WeatherTree,multimap<int,Weather> MonthMap); //do the task of option 1
+void Option2(Bst<Weather> &WeatherTree); // do the task of option 2
+void Option3(Bst<Weather> &WeatherTree); // do the task of option 3
+void Option4(Bst<Weather> &WeatherTree); // do the task of option 4
+void PrintOption1Output(unsigned Month,unsigned Year,float AverageTemperature,float AverageWindSpeed); // print option  1 to screen
+void PrintOption2OutPut(unsigned Month, float AverageTemperature, float AverageWindSpeed); // print option 2 output to screen
+void PrintOption3Output(unsigned Month,float Solar_Kwh_Msqr); // print option 3 output to screen
+void PrintOption4ToCsv(unsigned Month,float Solar_Kwh_Msqr,float AvgWindSpeed,float AvgTemperature,unsigned Year,ofstream &Outfile); // print option 4 to screen
+ 
+ 
+ 
+ 
+int main ()
+{
+    //----------------------------Initialising and declaration of variable--------------------------
+ 
+    int Choice=0;
+    string S_Choice ="",IgnoreLine="",InsertIntoBst;
+ 
+//-----------------------------------------------------------------------------------------------
+ 
+    Vector<Weather> WeatherVec; // create a Vector object of type Weather and name it WeatherVec
+    Bst<Weather> WeatherTree;
+    multimap<int,Weather> MonthMap;
+    ifstream infile; // instantiate ifstream to read file
+    infile.open(FileName); // open file through ifstream
+    if(infile.is_open())
+    {
+        // check if the file is open
+        ReadAllDataFromFile(WeatherVec,FileName,WeatherTree); // call the function to store all the record in Vector obj
+        infile.close(); // close the file
+        PrintMenu(); // print the menu options
+        cout<<"Please enter your choice"<<endl; // prompt for S_Choice
+        cin>>S_Choice;//Get S_Choice
+ 
+        while(CheckChoice(Choice,S_Choice)==false)
+        {
+            // if incorrect user input prompt and get again
+            cout<<"Please enter your choice again 1 - 5"<<endl;
+            cin>>S_Choice;
+        }
+        cout<<endl; // print new line
+ 
+        while (Choice!=5) // if the choice inputed by the user not equal 5 enter while loop
+        {
+            switch(Choice)
+            {
+            // check the choice value
+            case 1:
+ 
+ 
+                Option1(WeatherTree,MonthMap); // call option 1 functions
+ 
+ 
+ 
+                break;
+ 
+            case 2:
+ 
+ 
+                Option2(WeatherTree); // call option 2 functions
+ 
+ 
+ 
+ 
+                break;
+ 
+            case 3:
+ 
+                Option3(WeatherTree); // call option 3 functions
+ 
+ 
+                break;
+ 
+ 
+            case 4:
+ 
+                Option4(WeatherTree); // call option 4 functions
+ 
+                break;
+ 
+            }
+            cout<<endl;
+            PrintMenu(); // print the menu option again
+            cout<<"Please enter your choice again"<<endl; // prompt for the S_choice
+            cin>>S_Choice; // get S_Choice
+            cout<<endl;
+            while(CheckChoice(Choice,S_Choice)==false)
+            {
+                // if user input incorrect prompt and get S_Choice again
+                cout<<"Please enter your choice again 1 - 5 "<<endl;
+                cin>>S_Choice;
+            }
+            if(Choice==5)
+            {
+                // if the user input is = 5 break from the loop
+                break;
+            }
+        }
+ 
+    }
+    else
+    {
+        // if file is not opened print error
+        cout<<"Error reading file"<<endl;
+ 
+    }
+    // print to screen program ended
+    cout<<"Program ended"<<endl;
+    return 0; // return to os
+}
+ 
+void PrintMenu()
+{
+    // printing out the menu option titles
+    cout<<endl;
+    cout<<"1. Print the average wind speed and average ambient air temperature for a specified month and year to screen."<<endl;
+    cout<<endl;
+    cout<<"2. Print the Average wind speed and average ambient air temperature for each month of a specified year. "<<endl;
+    cout<<endl;
+    cout<<"3. Print the Total solar radiation in kWh/m2 for each month of a specified year.  "<<endl;
+    cout<<endl;
+    cout<<"4. Write the Average wind speed (km/h), average ambient air temperature and total solar radiation in \n"
+        <<"   kWh/m2 for each month of a specified year to file. "<<endl;
+    cout<<endl;
+    cout<<"5. Exit the program. "<<endl;
+    cout<<endl;
+ 
+}
+ 
+ 
+ 
+void PrintYearRequest()
+{
+ 
+    cout<<"Please Enter the Year (Not earlier than 1998 and not later than 2020)"<<endl;
+    cout<<endl;
+}
+ 
+void PrintMonthRequest()
+{
+ 
+    cout<<"Please Enter the Month (Between 1 to 12) "<<endl;
+    cout<<endl;
+}
+ 
+float CalAvgWindSpeed(Vector<Weather> & WeatherVecObj,unsigned month, unsigned year)
+{
+    // calculating average windspeed for the months of the year
+    float AverageWindSpeed=0.0,ConvertingSpeed=0.0;
+    unsigned I_Month=0,counter=0;
+    for(int i = 0; i<WeatherVecObj.GetLength(); i++) // loop till the last element of the vector
+    {
+        istringstream(WeatherVecObj[i].GetDate().GetMonth())>>I_Month; // convert string month to unsigned U_Month
+        if(WeatherVecObj[i].GetDate().GetYear()== year && I_Month==month) // if the element year and the month is the same as the specific year and month go in if statement
+        {
+ 
+            ConvertingSpeed = WeatherVecObj[i].GetSpeed()*3.6; // the windspeed of the element times 3.6 and assigned to Converting Speed
+            AverageWindSpeed += ConvertingSpeed; // AverageWindSpeed plus adding ConvertingSpeed in the loop
+            counter++; // increment counter by 1
+        }
+    }
+    if(AverageWindSpeed!=0)
+    {
+        // if avaerage wind speed not equals to 0
+        AverageWindSpeed = AverageWindSpeed/counter; //AverageWindSpeed is divided by counter
+        AverageWindSpeed = round(AverageWindSpeed*10)/10; // round up to the first decimal point
+    }
+    return  AverageWindSpeed;// return the average wind speed of the month of the year
+ 
+ 
+}
+ 
+float CalSolarRad(Vector<Weather> &WeatherVecObj, unsigned Month, unsigned Year)
+{
+    // calculate solar radiation
+    float Total_Solar_Rad_kWh_Msqr=0.0,Get_Solar_Rad_W_Msqr=0.0,Cal_Solar_Rad_W_Msqr=0.0;
+    unsigned I_Month=0;
+ 
+    for(int i = 0; i<WeatherVecObj.GetLength(); i++) // loop till the end of the Vector
+    {
+        istringstream(WeatherVecObj[i].GetDate().GetMonth())>>I_Month;// converting string month to unsigned I_Month
+ 
+        if(WeatherVecObj[i].GetDate().GetYear() == Year && I_Month==Month && WeatherVecObj[i].GetSolarMSqr()>=100)
+        {
+            // if year and month = to specific year AND solar radiation value of the element is more or equal to 100 enter if statement
+ 
+ 
+            Get_Solar_Rad_W_Msqr = WeatherVecObj[i].GetSolarMSqr();// retrieve solar radiation of the element
+            Cal_Solar_Rad_W_Msqr = Get_Solar_Rad_W_Msqr*1/6; // converting the solar radiation
+            Cal_Solar_Rad_W_Msqr = Cal_Solar_Rad_W_Msqr/1000; // calculating the solar radiation
+            Total_Solar_Rad_kWh_Msqr += Cal_Solar_Rad_W_Msqr; // plus adding the solar radiation to Total_Solar_Rad_kWh_Msqr
+        }
+    }
+ 
+    Total_Solar_Rad_kWh_Msqr = round(Total_Solar_Rad_kWh_Msqr*10)/10; // round up the total solar radiation of the month of the year to first decimal place
+ 
+    return Total_Solar_Rad_kWh_Msqr; // return the total solar radiation
+ 
+}
+ 
+float CalAvgTemp(Vector<Weather> & WeatherVecObj,unsigned month, unsigned year)
+{
+    float ConvertingTemp=0.0,AverageTemperature=0.0;
+    unsigned I_Month,counter=0;
+ 
+    for(int i = 0; i<WeatherVecObj.GetLength(); i++)
+    {
+        istringstream(WeatherVecObj[i].GetDate().GetMonth())>>I_Month; // converting string month to unsigned I_Month
+        if(WeatherVecObj[i].GetDate().GetYear() == year && I_Month==month)
+        {
+            // if year and month = to specific year AND Month
+            ConvertingTemp += WeatherVecObj[i].GetTemperature(); // adding to the ConvertingTemp of the temperature of each of the element
+            counter++; // increment counter by 1 every loop
+        }
+    }
+    if(ConvertingTemp!=0)
+    {
+        // if ConvertingTemp not equals to 0
+ 
+        AverageTemperature = ConvertingTemp/counter; // ConvertingTemp divided by counter to get average
+        AverageTemperature = round(AverageTemperature*10)/10; // round up to the nearing tenth
+    }
+    return AverageTemperature;
+}
+ 
+ 
+ 
+string GetMonthName(unsigned month)
+{
+    // return the string name of the month entered in the parameter
+    string Month = "";
+    if(month == 1)
+    {
+        Month = "January";
+        return Month;
+    }
+    else if (month == 2)
+    {
+        Month = "February";
+        return Month;
+    }
+    else if (month == 3)
+    {
+        Month = "March";
+        return Month;
+    }
+    else if (month == 4)
+    {
+        Month = "April";
+        return Month;
+    }
+    else if (month == 5)
+    {
+        Month = "May";
+        return Month;
+    }
+    else if (month == 6)
+    {
+        Month = "June";
+        return Month;
+    }
+    else if (month == 7)
+    {
+        Month = "July";
+        return Month;
+    }
+    else if (month == 8)
+    {
+        Month = "August";
+        return Month;
+    }
+    else if (month == 9)
+    {
+        Month = "September";
+        return Month;
+    }
+    else if (month == 10)
+    {
+        Month = "October";
+        return Month;
+    }
+    else if (month == 11)
+    {
+        Month = "November";
+        return Month;
+    }
+    else if (month == 12)
+    {
+        Month = "December";
+        return Month;
+    }
+    return Month;
+}
+ 
+ 
+ 
+ 
+ 
+bool CheckMonth(unsigned &Month, string S_Month)
+{
+    // method to error check the month input
+    unsigned U_Month;
+    istringstream(S_Month)>> U_Month; // convert string month to unsigned U_Month
+    if(U_Month>0 && U_Month<13)
+    {
+        // if U_Month is more than 0 and less than 13 set Month and return true
+        Month = U_Month;
+        return true;
+    }
+    else
+    {
+        // else return false
+        return false;
+    }
+ 
+}
+ 
+bool CheckYear(unsigned &Year, string S_Year)
+{
+    // method to error check the year  input
+    unsigned U_Year;
+    istringstream(S_Year)>>U_Year; // convert string month to unsigned U_Year
+    if(U_Year>=1998 && U_Year<2021)
+    {
+        // if U_Year  is more than 1000 and less than 2021 set Year  and return true
+        Year = U_Year; //
+        return true;
+    }
+    else
+    {
+        // if condition not met return false
+        return false;
+    }
+}
+ 
+void Option1(Bst<Weather> &WeatherTree,multimap<int,Weather> MonthMap)
+{
+    // if Choice = 1
+    unsigned C_Year=0,C_Month=0,Temp_Month=0;
+    float AvgWindSpeed=0,AvgTemperature=0;
+    string S_Month ="", S_Year="";
+    Vector<Weather> YearVec;
+    Weather TempObj;
+    Vector<Weather> MonthVec;
+    PrintMonthRequest(); // prompt S_Month
+    cin>>S_Month; //get S_Month
+    while (CheckMonth(C_Month, S_Month)==false)
+    {
+        // if the C_Month is incorrect enter prompt and get again
+        PrintMonthRequest();
+        cin>>S_Month;
+    }
+ 
+    PrintYearRequest(); // prompt for S_Year
+    cin>>S_Year; // get S_Year
+    while (CheckYear(C_Year,S_Year)==false)
+    {
+        // if the C_Year is incorrect enter prompt and get again
+        PrintYearRequest();
+        cin>>S_Year;
+    }
+    if(WeatherTree.Search(C_Year)) // check if the key exist in the bst
+    {
+        YearVec = WeatherTree.ReturnVec(C_Year); // if the key exist return the Vector of the Key
+        {
+            for(int i = 0; i<YearVec.GetLength(); i++) // loop through the vector
+            {
+                istringstream(YearVec[i].GetDate().GetMonth())>>Temp_Month; // convert the string to unsigned
+                if(Temp_Month == C_Month)
+                {
+                    TempObj = YearVec[i]; // if the weather obj in the element is = to c_Month then assign to TempObj
+                    MonthMap.insert(pair<int,Weather>(C_Month,TempObj)); //Pair the Month together with the tempObj in multimap
+                }
+            }
+        }
+        for(auto elem: MonthMap) // for each element in MonthMap
+        {
+            MonthVec.PushBack(elem.second); // Insert the value into MonthVec
+        }
+        AvgWindSpeed= CalAvgWindSpeed(MonthVec,C_Month, C_Year); // calculate average windspeed
+        AvgTemperature= CalAvgTemp(MonthVec,C_Month,C_Year); // calculate average temperature
+ 
+    }
+    else
+    {
+        cout<<"No Data"<<endl;
+    }
+ 
+    PrintOption1Output(C_Month,C_Year,AvgTemperature,AvgWindSpeed); // print the output to screen*/
+ 
+ 
+}
+ 
+void PrintOption1Output(unsigned Month,unsigned Year,float AverageTemperature,float AverageWindSpeed)
+{
+    // print output option
+    if(AverageTemperature==0 && AverageWindSpeed==0)
+    {
+        // check if windspeed and temperature is 0
+        cout<< GetMonthName(Month)<<" "<<Year<<" : No data"<<endl;
+    }
+    else
+    {
+        cout<< GetMonthName(Month)<<" "<<Year<<" : "; // print the month name and the year followed by windspeed and temperature
+        cout<<AverageWindSpeed<<" km/h, "<< AverageTemperature<<" degrees C"<<'\n';
+        cout<<endl;
+    }
+}
+ 
+void Option2(Bst<Weather> &WeatherTree)
+{
+    unsigned C_Year=0;
+    float AvgWindSpeed=0,AvgTemperature=0;
+    string S_Year="";
+    Vector<Weather> YearVec;
+    PrintYearRequest();// prompt for S_Year
+    cin>>S_Year;// get S_Year
+    while (CheckYear(C_Year,S_Year)==false)
+    {
+        // if the C_Year is incorrect enter prompt and get again
+        PrintYearRequest();
+        cin>>S_Year;
+    }
+ 
+    if(WeatherTree.Search(C_Year)) // check if the key exist in the bst
+    {
+        YearVec = WeatherTree.ReturnVec(C_Year); // if the key exist return the Vector of the Key
+        for (unsigned i = 0; i<12; i++) // loop 12 times
+        {
+            AvgWindSpeed = CalAvgWindSpeed(YearVec,i+1, C_Year); // calculate the average windspeed of each month
+            AvgTemperature = CalAvgTemp(YearVec,i+1, C_Year); // caclualte the average temperature of each month
+            PrintOption2OutPut(i+1,AvgTemperature,AvgWindSpeed); // print the out put for each month
+        }
+    }
+    else
+    {// if key not found print No Data.
+        cout<<"No Data"<<endl;
+    }
+}
+void PrintOption2OutPut(unsigned Month, float AverageTemperature, float AverageWindSpeed)
+{
+    if(AverageTemperature!=0 && AverageWindSpeed!=0)
+    {
+        // print out if temperature and windspeed is not equal to 0
+        cout<< GetMonthName(Month)<<" : "; // print the month name and the year followed by windspeed and temperature
+        cout<<AverageWindSpeed<<" km/h, "<< AverageTemperature<<" degrees C"<<'\n';
+        cout<<endl;
+    }
+    else
+    {
+        // else print out no data for the month
+        cout<< GetMonthName(Month)<<" : No data"<<endl;
+        cout<<endl;
+    }
+}
+ 
+void Option3(Bst<Weather> &WeatherTree)
+{
+    unsigned C_Year=0;
+    float Solar_Kwh_Msqr=0;
+    string S_Year="";
+    Vector<Weather> YearVec;
+    PrintYearRequest();// prompt for S_Year
+    cin>>S_Year;// get S_Year
+    while (CheckYear(C_Year,S_Year)==false)
+    {
+        // if the C_Year is incorrect enter prompt and get again
+        PrintYearRequest();
+        cin>>S_Year;
+    }
+    if(WeatherTree.Search(C_Year))// check if the key exist in the bst
+    {
+        YearVec = WeatherTree.ReturnVec(C_Year); // if the key exist return the Vector of the Key
+        for(unsigned i = 0; i<12; i++)
+        {
+            // loop 12 times
+            Solar_Kwh_Msqr = CalSolarRad(YearVec, i+1, C_Year); // calculate the solar radiation kwh/m2 for each month of the year
+            PrintOption3Output(i+1,Solar_Kwh_Msqr); // print the output of option 3
+        }
+    }
+    else
+    {// if key not found print No Data.
+        cout<<"No Data"<<endl;
+    }
+}
+ 
+ 
+void PrintOption3Output(unsigned Month,float Solar_Kwh_Msqr)
+{
+    if(Solar_Kwh_Msqr!=0)
+    {
+        // if the solar radiation is not equals to 0 print out the solar radiation in kWh/m2
+        cout<<GetMonthName(Month)<<": "<<Solar_Kwh_Msqr<<" kWh/m2"<<endl;
+        cout<<endl;
+    }
+    else
+    {
+        // print out the no data for the month
+        cout<<GetMonthName(Month)<<": No Data"<<endl;
+        cout<<endl;
+    }
+}
+ 
+void Option4(Bst<Weather> &WeatherTree)
+{
+    unsigned C_Year=0;
+    float AvgWindSpeed=0,AvgTemperature=0, Solar_Kwh_Msqr=0;
+    string S_Year="";
+    Vector<Weather> YearVec;
+    ofstream Outfile; // instantiate the ofstream object to write file
+    Outfile.open(OutFileName); // open WindTempSolar.csv if not found create one
+ 
+ 
+    PrintYearRequest();// prompt for S_Year
+    cin>>S_Year;// get S_Year
+    while (CheckYear(C_Year,S_Year)==false)
+    {
+        // if the C_Year is incorrect enter prompt and get again
+        PrintYearRequest();
+        cin>>S_Year;
+    }
+    Outfile<<C_Year<<endl; // write the year to file
+    if(WeatherTree.Search(C_Year)) // check if the key exist in the bst
+    {
+        YearVec = WeatherTree.ReturnVec(C_Year); // if the key exist return the Vector of the Key
+        for( int i = 0; i<12; i++)
+        {
+            Solar_Kwh_Msqr = CalSolarRad(YearVec, i+1, C_Year);// calculate the solar radiation kwh/m2 for each month of the year
+            AvgTemperature =  CalAvgTemp(YearVec,i+1,C_Year);// caclualte the average temperature of each month
+            AvgWindSpeed = CalAvgWindSpeed(YearVec,i+1, C_Year);// calculate the average windspeed of each month
+            PrintOption4ToCsv(i+1,Solar_Kwh_Msqr,AvgWindSpeed,AvgTemperature,C_Year,Outfile); // write the records of each month of the year to the file
+        }
+    }
+    else // if key not found print No Data.
+    {
+        Outfile<<"No Data"<<endl;
+    }
+ 
+    cout<<"Successfully wrote to "<<OutFileName<<" file"<<endl; // print to screen to indicate wrote successfully
+    Outfile.close(); // close the ofstream
+}
+ 
+void PrintOption4ToCsv(unsigned Month,float Solar_Kwh_Msqr,float AvgWindSpeed,float AvgTemperature,unsigned Year,ofstream &Outfile)
+{
+ 
+    if(Solar_Kwh_Msqr!=0 &&AvgWindSpeed!=0 && AvgTemperature!=0)
+    {
+        Outfile<<GetMonthName(Month)<<','<<AvgWindSpeed<<','<<AvgTemperature<<','<<Solar_Kwh_Msqr<<endl;
+        cout<<endl;
+    }
+    else
+    {
+        Outfile<<GetMonthName(Month)<<','<<"No Data"<<endl;
+        cout<<endl;
+    }
+}
+ 
+void ReadAllDataFromFile(Vector<Weather> &WeatherVec,string FileName,Bst<Weather> &WeatherTree)
+{
+    //----------------------------------Variable and objects declaration and initialisation-----------------------------------
+    string IgnoreColumn,T_speed,getLine,T_Temperature="",S_Day,S_Month,S_Year,S_Hrs,S_Mins,IgnoreLine,S_Solar_M_Sqr,FileNames;
+    unsigned Temp_Day=0,Temp_Year=0;
+    float I_Speed=0,F_Temperature=0,F_Solar_M_Sqr=0;
+    int Temp_Hrs=0,Temp_Mins=0,ErrorFile = 0,LoadedFile =0;
+    Date T_DateObj;
+    Time T_TimeObj;
+    Weather T_WObj;
+//----------------------------------------------------------------------------------------------------------------------------
+    ifstream infile(FileName);
+    cout<<"Loading Files";
+    while(!infile.eof())
+    {
+        cout<<".";
+        getline(infile,FileNames);
+ 
+        // loop till the end of file
+ 
+        FileNames="data/"+FileNames;
+ 
+        ifstream infiles (FileNames);
+        if (infiles.is_open())
+        {
+            cout<<".";
+            getline(infiles,IgnoreLine,'\n'); // read in the file line of the file which contains the titles
+ 
+            while(!infiles.eof())
+            {
+                getline(infiles,S_Day,'/');// read data till the delimiter /
+                istringstream(S_Day)>>Temp_Day; // convert string day to unsigned day
+                getline(infiles,S_Month,'/');// read data till the delimiter /
+                getline(infiles,S_Year,' ');// read data till the delimiter ' '
+                istringstream (S_Year)>>Temp_Year;// convert string year to unsigned year
+                getline(infiles,S_Hrs,':');// read data till the delimiter :
+                istringstream(S_Hrs)>>Temp_Hrs;// convert string hours to int hours
+                getline(infiles,S_Mins,',');// read data till the delimiter ,
+                istringstream(S_Mins)>>Temp_Mins;// convert string minutes to int minutes
+                T_DateObj.SetDay(Temp_Day);//Set the day to date object T_DateObj
+                T_DateObj.SetMonth(S_Month);// set the month to date object T_DateObj
+                T_DateObj.SetYear(Temp_Year); // set the year  to date object T_DateObj
+                T_TimeObj.SetHours(Temp_Hrs); // set the hours to time object T_TimeObj
+                T_TimeObj.SetMins(Temp_Mins); // set the minutes to time object T_TimeObj
+                T_WObj.SetDate(T_DateObj); //set the date T_WObj weather object
+                T_WObj.SetTime(T_TimeObj); // set the time T_WObj weather object
+ 
+                for(int i =0; i<9; i++)
+                {
+                    // loop 9 times to ignore 9 columns
+                    getline(infiles,IgnoreColumn,',');
+ 
+                }
+                getline(infiles,T_speed,','); // read data till the delimiter ,
+                istringstream(T_speed)>>I_Speed; // convert string windspeed to float windspeed
+                T_WObj.SetSpeed(I_Speed);
+                getline(infiles,S_Solar_M_Sqr,',');// read data till the delimiter ,
+                istringstream(S_Solar_M_Sqr)>>F_Solar_M_Sqr; // convert string solar radiation to float solar radiation
+                T_WObj.SetSolarMSqr(F_Solar_M_Sqr); // set the solar radiation to T_WObj weather object
+                for(int i =0; i<5; i++)
+                {
+                    // loop 5 times to ignore 5 columns
+                    getline(infiles,IgnoreColumn,',');// read data till the delimiter ,
+                }
+ 
+                getline(infiles,T_Temperature,'\n');// read data till the delimiter \n
+                if(!T_Temperature.empty()) // check if the temperature string is not empty
+                {
+                    istringstream(T_Temperature)>>F_Temperature; // convert the string temperature to float temperature
+                    T_WObj.SetTemperature(F_Temperature); // set temperature to T_WObj weather object
+                    WeatherTree.Insert(Temp_Year,T_WObj); // insert the object into Bst Vector according to the Key(Temp_Year)
+ 
+                }
+                T_Temperature = ""; // erase the value of temperature
+ 
+            }
+            LoadedFile++; // count the successfully opened files
+        }
+        else
+        {
+            cout<<endl;
+            cout<<"Failed to open: "<<FileNames<<endl; // print the failed to open file name to screen
+            cout<<"Loading Files";
+            ErrorFile++; // count the files that failed to open
+        }
+    }
+    cout<<endl;
+    cout<<"Loading Completed"<<endl;
+    cout<<"Total files loaded: "<<LoadedFile<<" "<<"Number of files not loaded: "<<ErrorFile<<" "<<endl;
+ 
+}
+ 
+ 
+bool CheckChoice(int &I_Choice,string S_choice)
+{
+    // error checking the choice user input
+    int T_Choice; //
+ 
+ 
+    istringstream(S_choice)>>T_Choice;// convert string choice to int choice
+ 
+    if(T_Choice>0 && T_Choice <6)
+    {
+        // int choice is more than 0 AND less than 5
+        I_Choice = T_Choice; // set I_Choice to int T_Choice
+ 
+        return true;// return true
+    }
+    else
+    {
+        //if condition not met return false
+        return false;
+    }
+ 
+}
+ 
+ 
+ 
+#include "date.h"
+ 
+Date::Date()
+{
+    m_day = 0; // initialise the m_day
+    m_month="Invalid Month";// initialise the m_month
+    m_year = 0; // initialise m_year
+}
+ 
+Date::~Date()
+{
+    m_day = 0; // overwrite the m_day
+    m_month="Invalid Month";// overwrite the m_month
+    m_year = 0; // overwrite the m_year
+ 
+}
+ 
+ 
+bool Date::SetDay(unsigned day )
+{
+    if(day > 0 && day <= 31)
+    { // if day is more than 0 and less or equal to 31
+        m_day = day; // set  m_day to day
+        return true; // return true
+    }
+    else
+    { // condition not met return false
+        return false;
+    }
+ 
+}
+ 
+unsigned Date::GetDay() const
+{ // return value of m_day
+    return m_day;
+}
+ 
+bool Date::SetMonth(string month)
+{
+    unsigned U_Month;
+    istringstream(month)>>U_Month; // convert string month to unsigned U_Month
+    if(U_Month>0 && U_Month<13)
+    { // if I_Month more than 0 and less than 13
+        m_month=month; // set m_month = month
+        return true;
+    }
+    else
+    { // if condition not met return false
+        return false;
+    }
+ 
+}
+string Date::GetMonth() const
+{
+    return m_month; // return the value of month of the class
+}
+ 
+bool Date::SetYear(unsigned year)
+{
+    if(year>1998 && year<=2020)
+    { // if year more than 1000 AND year less or equal to 2020
+        m_year = year; // set m_year = year and return true
+        return true;
+    }
+    else
+    {// if condition not met return false
+        return false;
+    }
+ 
+}
+ 
+unsigned Date:: GetYear() const
+{ //return the year of the class
+    return m_year;
+}
+ 
+ 
+ 
+#include "time.h"
+ 
+Time::Time()
+{ // inititalise the members of the class
+    m_Hours = 0;
+    m_Mins = 0;
+}
+ 
+Time::~Time()
+{ // erase or overwrite the value of instantiated Time class
+    m_Hours = 0;
+    m_Mins = 0;
+}
+ 
+bool Time::SetHours(int Hours)
+{ // set Hours equals to m_Hours if Hour is more or equal to zero AND less than 24
+    if(Hours >=0 && Hours<24)
+    {
+         m_Hours = Hours;
+         return true;
+    }
+    else
+    {// if condition not met then return false
+        return false;
+    }
+ 
+}
+ 
+bool Time::SetMins(int minutes)
+{ // if minutes more to equal to zero AND minutes less than 60
+    if (minutes >=0 && minutes <60)
+    {// set member m_Mins to minutes
+        m_Mins = minutes;
+        return true;
+    }
+    else
+    {// return false if condition not met
+        return false;
+    }
+ 
+}
+int Time::GetHours() const
+{ // return the value of hours of the class
+    return m_Hours;
+}
+int Time::GetMins() const
+{// return the value of minutes of the class
+    return m_Mins;
+}
+ 
+ 
+ 
+#include "weather.h"
+ 
+Weather::Weather()
+{// initialise the value of members
+    m_Speed = 0;
+    m_Temperature = 0;
+    m_Solar_M_Sqr = 0;
+ 
+ 
+}
+ 
+Weather::~Weather()
+{ //// erase the value or overwritting the value of members
+    m_Speed = 0;
+    m_Temperature = 0;
+    m_Solar_M_Sqr = 0;
+ 
+}
+ 
+ 
+ 
+bool Weather:: SetSpeed( float T_Speed)
+{ // check if T_Speed is more or equal to 0
+    if(T_Speed >=0 )
+    { // if yes set member speed to T_speed
+        m_Speed = T_Speed;
+        return true;
+    }
+    else
+    {// if not return false
+        return false;
+    }
+ 
+}
+ 
+ 
+void Weather:: SetTemperature( float T_Temperature)
+{
+ // set m_Temperature to T_Temperature
+    m_Temperature = T_Temperature;
+}
+ 
+ 
+void  Weather::SetDate(Date T_DateObj)
+{ // set m_DateObj = Date T_DateObj
+    m_DateObj = T_DateObj;
+}
+ 
+ 
+void Weather::SetTime(Time T_TimeObj)
+{
+    m_TimeObj = T_TimeObj;
+} // set m_TimeObj to T_TimeObj
+ 
+ 
+ float Weather::GetSpeed() const
+{// return the value of windspeed of the class
+    return m_Speed;
+}
+ 
+ float Weather::GetTemperature() const
+{
+    return m_Temperature;
+}
+ 
+void Weather::SetSolarMSqr(float SolarMSqr)
+{ // set m_Solar_M_Sqr = SolarMSqr
+    m_Solar_M_Sqr = SolarMSqr;
+}
+ 
+float Weather::GetSolarMSqr()
+{ // return the value of m_Solar_M_Sqr
+    return m_Solar_M_Sqr;
+}
+ 
+Date Weather::GetDate() const
+{ // return the of the Date of the class
+    return m_DateObj;
+}
+ 
+Time Weather::GetTime() const
+{ // return the m_TimeObj value
+    return m_TimeObj;
+}
+ 
+ 
+ 
+ 
+#ifndef VECTOR_H
+#define VECTOR_H
+#include <iostream>
+ 
+#define DefaultSize 10
+ 
+//---------------------------------------------------------------
+/**
+*@class Vector
+*@brief The Vector template that holds the inputted data
+*
+*
+*The Vector Template can be created in with any data type
+*it is used to hold the inputted data from the file
+*and store it.
+*
+*
+*
+*
+*@author Tan Jun Qi
+*@version 10
+*@date 19/June/2020 Singapore,Singapore
+*
+*
+*
+*/
+//---------------------------------------------------------------------------
+ 
+using namespace std;
+ 
+template<class T>
+class Vector
+{
+public:
+    /**
+    *@brief The Default Vector constructor
+    *
+    *This initialise the member or attributes of time class and
+    *allocate memory space in the heap memory for the dynamic array
+    *
+    *
+    *@return void
+    *
+    */
+    Vector();
+    /**
+     *
+     *@fn GetSize()
+     *
+     *@brief Function to return the total size of the array
+     *
+     *
+     *return the total size of the array to check if the array
+     *is expanding
+     *
+     *
+     *@return int
+     *
+     */
+    int GetSize() const ;
+    /**
+    *
+    *@fn IsEmpty()
+    *
+    *@brief Function to check if the array is empty
+    *
+    *
+    *check if there are any elements inside of the array
+    *return false if there is elements return true if its
+    *empty
+    *
+    *@return bool
+    *
+    */
+    bool IsEmpty();
+    /**
+    *
+    *@fn PushBack(T value)
+    *
+    *@brief Function to add in new data into array
+    *
+    *
+    *Add the data into the last element of the array
+    *
+    *
+    *
+    *@return void
+    *
+    */
+    void PushBack(T value);
+    /**
+    *
+    *@fn PopBack()
+    *
+    *@brief Erase the last element of the array
+    *
+    *
+    *Dis count the last element of the array and enable
+    *it to be overwritten by new data
+    *
+    *return true if there is element in array and discounted
+    *
+    *return false if there is no element in the array
+    *
+    *@pre The array must have elements inside
+    *@return bool
+    *
+    */
+    bool PopBack();
+    /**
+    *
+    *@fn Resize()
+    *
+    *@brief Resize the total size of the array
+    *
+    *
+    *Expand the array if the element in the array is more
+    *than half of the total size by 1.5 times
+    *
+    *
+    *@return void
+    *
+    */
+    void Resize();
+    /**
+    *
+    *@fn GetLength()
+    *
+    *@brief Resize the length of the array
+    *
+    *
+    *return the total number of elements residing inside
+    *of the array.
+    *
+    *@return int
+    *
+    */
+    int GetLength() const;
+    /**
+    *
+    *@overload T& operator[](int index) const
+    *
+    *@brief Overloading of [] operator
+    *
+    *overload the [] to return the element of the array
+    *passed in to the paramemter
+    *
+    *@param index - int type
+    *@return T&
+    *
+    */
+ 
+ 
+    T& operator[](int index) const;
+    /**
+    *
+    *@fn Vector();
+    *
+    *@brief The destructor of Vector
+    *
+    *Release the memory back to the OS and set the
+    *memory location of the array to null.
+    *
+    *
+    *@return void
+    *
+    */
+ 
+    ~Vector();
+ 
+    /**
+    *
+    *@overload operator = (const Vector<T> &Vec)
+    *
+    *@brief The = operator overloader
+    *
+    *Calls the copy function and return this object.
+    *
+    *
+    *@param Vec - Vector of type class.
+    *@return Vector<T>&
+    *
+    */
+    Vector<T>&  operator = (const Vector<T> &Vec);
+    /**
+    *
+    *
+    *@brief The copy constructor
+    *
+    *Calls the copy function
+    *
+    *
+    *@param Vec - Vector of type class.
+    *
+    */
+    Vector(const Vector<T>& Vec);
+ 
+ 
+ 
+ 
+ 
+private:
+    /// Holds the number of element in the array
+    int m_length;
+    /// The dynamic array that holds the records
+    T *m_array;
+    /// Hold the total size of the array
+    int m_Tsize;
+    /**
+    *
+    *@fn Copy(const Vector<T> & Vec)
+    *
+    *@brief The copy function
+    *
+    *The function copies the data in the elements in other Vector
+    *to this Vector object (Deep copying)
+    *
+    *
+    *@param Vec - Vector of type class.
+    *@return bool
+    *
+    */
+    bool Copy(const Vector<T> & Vec);
+};
+ 
+ 
+ 
+template<class T>
+Vector<T>::Vector()
+{
+    // initiate member variables to
+    m_length = 0;
+    m_array = new T[DefaultSize]; // allocate new memory location on heaps for the dynamic array
+    m_Tsize = DefaultSize;
+}
+template<class T>
+Vector<T>::Vector(const Vector<T>& Vec) // copy constructor
+{
+    Copy(Vec); // calls the copy function
+}
+ 
+template<class T>
+bool Vector<T>::Copy(const Vector<T> & Vec) // copy function
+{
+    if(Vec.m_array!=nullptr && Vec.GetLength()!=0 && Vec.GetSize()!=0)
+    { // if other Vec m_array!=null and vec not empty and size not zero
+        m_length = Vec.GetLength(); // assigning Other vect's data to this object members
+        m_Tsize = Vec.GetSize();
+        m_array = new T[Vec.GetSize()]; // allocating new memory spaces for m_array
+        for(int i = 0; i<Vec.GetLength(); i++)
+        {
+            m_array[i] = Vec.m_array[i]; // assigning other Vector array elements to this object
+        }
+        return true;
+    }
+    else
+    {
+        return false;
+    }
+}
+template<class T>
+Vector<T>& Vector<T>::operator = (const Vector<T> &Vec)
+{
+    Copy(Vec); // calls the copy function
+    return *this; // return this object
+}
+ 
+ 
+template<class T>
+Vector<T>::~Vector()
+{
+    // release the memory location on heap back to os if dynamic array is not null
+    if(m_array!=nullptr)
+    {
+        delete[] m_array;
+        m_array = nullptr;
+    }
+    m_Tsize = 0;
+    m_length = 0;
+}
+ 
+template<class T>
+int Vector<T>::GetLength() const
+{
+    // return the length of the array
+    return m_length;
+}
+ 
+template<class T>
+int Vector<T>::GetSize() const
+{
+    // return the total size of the array
+    return m_Tsize;
+}
+ 
+ 
+template<class T>
+void Vector<T>::Resize()
+{
+    // resize the array by 1.5 times its original size
+    m_Tsize = m_Tsize*1.5;
+    T *newarray = new T[m_Tsize]; // open new dyanmic array pointer
+    for (int i = 0; i<m_length; i++)
+    {
+        // allocate old elements in  array to new array
+        newarray[i] = m_array[i];
+    }
+    delete [] m_array; // delete old array
+    m_array = nullptr; // set old array to null
+    m_array = newarray; // allocate the memory location of new array to m_array
+ 
+}
+ 
+template<class T>
+bool Vector<T>::IsEmpty()
+{
+    // return true if there is not element in the array
+    if (m_length == 0)
+    {
+        return true;
+    }
+    else
+    {
+        return false;
+    }
+}
+ 
+ 
+template<class T>
+void Vector<T>::PushBack(T value)
+{
+    // add elements to the back of the array
+    m_array[m_length] = value;
+    m_length ++; // if the array element is more than half full
+    if(m_length>m_Tsize/2)
+    {
+        // call Resize function to resize the array
+        Resize();
+ 
+    }
+ 
+}
+ 
+template<class T>
+bool Vector<T>::PopBack()
+{
+    // if there is element in the array, minus the length of the array by 1
+    if(m_length!=0)
+    {
+        // the last element then is available to be overwritten or not in used
+        m_array[m_length] = 0;
+        m_length--;
+        return true;
+    }
+    else
+    {
+        // if the length if empty return false
+        return false;
+    }
+}
+ 
+template<class T>
+T& Vector<T>::operator[](int index) const
+{
+    // return the array element when [] is called
+    return m_array[index];
+}
+ 
+ 
+ 
+ 
+ 
+#endif // VECTOR_H
+ 
+#include <iostream>
+#include "Vector.h"
+ 
+//---------------------------------------------------------------
+/**
+*@class Bst
+*@brief The Sorting of the data through the use of Key
+*
+*
+*
+*Used the key to distinguish with Data should be under which node,
+*then the data enters into the Vector of that node. The key will not have any
+*duplicates
+*
+*
+*
+*
+*@author Tan Jun Qi
+*@version 4
+*@date 22/July/2020 Singapore,Singapore
+*
+*
+*
+*/
+//---------------------------------------------------------------------------
+ 
+ 
+using namespace std;
+ 
+/**
+    *@brief Node Struct
+    *
+    *This struct contains Key for identification, Vector for storing of datas,
+    *left and right points. This struct is used to create the structure of the
+    *Binary search tree, nodes with the key less than the root's key will be
+    *placed on the left and if more than root's key will be placed on the right.
+    */
+ 
+template <class T>
+struct Node  // answer why struct encapsulation is used - rationale
+{
+    /// Used to identify the struct
+    int Key;
+    /// Used to store datas with the same key
+    Vector <T> YearsData;
+    /// left pointer
+    Node <T> *Left;
+    /// right pointer
+    Node <T> *Right;
+};
+ 
+ 
+template <class T>
+class Bst
+{
+ 
+public:
+ 
+    /**
+    *@brief The Default constructor
+    *
+    *This constructor points the m_Root member to nullptr
+    *
+    *
+    *
+    */
+    Bst();
+    /**
+    *@brief The Destructor
+    *
+    *This Destructor called the "void Delete(Node<T> *CurrentNode)"
+    *functions to delete all the nodes in the tree.
+    *
+    *
+    *
+    */
+    ~Bst();
+    /**
+    *
+    *@fn typedef void (*InOrderTraversalPtr)(const  T&)
+    *
+    *@brief Declaration of function pointers with the signature
+    *
+    *This function pointers take in another function with the same signature to
+    *perform the operation/task of that function.
+    *
+    *
+    *
+    *@param T& - Template data type
+    *@return void
+    *
+    */
+    typedef void (*InOrderTraversalPtr)(const  T&);
+    /**
+    *
+    *@fn typedef void (*PreOrderTraversalPtr)(const T&)
+    *
+    *@brief Declaration of function pointers with the signature
+    *
+    *This function pointers take in another function with the same signature to
+    *perform the operation/task of that function.
+    *
+    *
+    *
+    *@param T& - Template data type
+    *@return void
+    *
+    */
+    typedef void (*PreOrderTraversalPtr)(const T&);
+    /**
+    *
+    *@fn typedef void (*PostOrderTraversalPtr)(const T&)
+    *
+    *@brief Declaration of function pointers with the signature
+    *
+    *This function pointers take in another function with the same signature to
+    *perform the operation/task of that function.
+    *
+    *
+    *
+    *@param T& - Template data type
+    *@return void
+    *
+    */
+    typedef void (*PostOrderTraversalPtr)(const T&);
+    /**
+    *
+    *@fn Search(int Key) const
+    *
+    *@brief The Searching of the Key
+    *
+    *
+    *This function performs the task of searching through the tree
+    *by its Key, if the key is found in the tree returns true else
+    *returns false.
+    *
+    *
+    *@param Key - int data type
+    *@return bool
+    *
+    */
+    bool Search(int Key) const;
+    /**
+    *
+    *@fn Insert(int Key,T DataObj)
+    *
+    *@brief Inserting of data with the Key and Data
+    *
+    *This function takes in two parameter, one which is the key and
+    *another one which is the data. It will search through the tree if
+    *the key exist or not. If the key exist, input the data into the vector
+    *of that node. Else find the call the "void Insert(int Key, Node<T> * CurrentNode,T DataObj)"
+    *to determine where the new node should be created and store the vector into the node identified
+    *with the key.
+    *
+    *
+    *@param Key - int data type
+    *@param DataObj - Template Data type
+    *@return void
+    *
+    */
+    void Insert(int Key,T DataObj);
+    /**
+    *
+    *@fn InOrderTraversal(InOrderTraversalPtr Print) const
+    *
+    *@brief In order Traversal function
+    *
+    *This function calls the
+    *InOrderTraversal(Node<T> * CurrentNode, InOrderTraversalPtr Print) const
+    *
+    *@param Print - InOrderTraversalptr (Contains a function to be executed with the same signature)
+    *@return void
+    *
+    */
+    void InOrderTraversal(InOrderTraversalPtr Print)const;
+    /**
+    *
+    *@fn PreOrderTraversal(PreOrderTraversalPtr Print)const
+    *
+    *@brief Pre order Traversal function
+    *
+    *This function calls the
+    *PreOrderTraversal(Node<T> *CurrentNode, PreOrderTraversalPtr Print) const
+    *
+    *
+    *@param Print - PreOrderTraversalPtr  (Contains a function to be executed with the same signature)
+    *@return void
+    *
+    */
+    void PreOrderTraversal(PreOrderTraversalPtr Print)const;
+    /**
+    *
+    *@fn PostOrderTraversal(PostOrderTraversalPtr Print) const
+    *
+    *@brief Post order Traversal function
+    *
+    *
+    *This function calls the
+    *PostOrderTraversal(Node<T> *CurrentNode,PostOrderTraversalPtr Print) const
+    *
+    *
+    *@param Print - PostOrderTraversalPtr  (Contains a function to be executed with the same signature)
+    *@return void
+    *
+    */
+    void PostOrderTraversal(PostOrderTraversalPtr Print) const;
+ 
+    /**
+    *
+    *@fn ReturnVec(int Key)
+    *
+    *@brief Returns the Vector of the key node
+    *
+    *This functions returns the whole Vector of the key node where
+    *the key node is user inputted.
+    *
+    *
+    *
+    *@param Key - int type
+    *@return Vector<T>
+    *
+    */
+    Vector<T> ReturnVec(int Key);
+ 
+ 
+ 
+ 
+private:
+    /// store the pointer of the Root node
+    Node<T> *m_Root;
+    /// store the pointer of a Node
+    Node<T> *m_FindNode;
+    /// store the Vector Object of a node
+    Vector<T> m_ReturnVec;
+    /**
+    *
+    *@fn Insert(int Key, Node<T> * CurrentNode,T DataObj)
+    *
+    *@brief Inserting of data with the Key, DataObj and the Node Pointer
+    *
+    *This function takes in 3 parameter, one which is the key and
+    *another one which is the data. This function will find where the
+    *location of the new node should be based on the key and create the
+    *node. It will then identify the node using the Key and enter the Data into
+    *it's Vector.
+    *
+    *
+    *@param Key - int data type
+    *@param DataObj - Template Data type
+    *@param CurrentNode - Node pointer of template class type
+    *@return void
+    *
+    */
+    void Insert(int Key, Node<T> * CurrentNode,T DataObj);
+    /**
+    *
+    *@fn InOrderTraversal(Node<T> * CurrentNode, InOrderTraversalPtr Print) const
+    *
+    *@brief In order Traversal function Overloader
+    *
+    *This function will traverse through the nodes in the tree
+    *and print the key of the nodes. it will print the left leaf node
+    *then the root and lastly the right leaf node in the respective manner.
+    *The output should be in ascending order.
+    *
+    *@param Print - InOrderTraversalptr (Contains a function to be executed with the same signature)
+    *@param CurrentNode - Node* of template class type
+    *@return void
+    *
+    */
+    void InOrderTraversal(Node<T> * CurrentNode, InOrderTraversalPtr Print) const ;
+    /**
+    *
+    *@fn PostOrderTraversal(Node<T> *CurrentNode,PostOrderTraversalPtr Print) const
+    *
+    *@brief Post order Traversal function overloader
+    *
+    *This function will traverse through the nodes in the tree
+    *and print the key of the nodes. it will print the left leaf node
+    *then the right leaf node and lastly the root node in the respective manner.
+    *
+    *
+    *@param Print - InOrderTraversalptr (Contains a function to be executed with the same signature)
+    *@param CurrentNode - Node* of template class type
+    *@return void
+    *
+    */
+    void PostOrderTraversal(Node<T> *CurrentNode,PostOrderTraversalPtr Print)const ;
+    /**
+    *
+    *@fn PreOrderTraversal(Node<T> *CurrentNode, PreOrderTraversalPtr Print) const
+    *@brief Pre order Traversal function overloader
+    *
+    *This function will traverse through the nodes in the tree
+    *and print the key of the nodes. it will print the Root node
+    *then the left leaf node and lastly the right leaf node in the respective manner.
+    *
+    *
+    *@param Print - InOrderTraversalptr (Contains a function to be executed with the same signature)
+    *@param CurrentNode - Node* of template class type
+    *@return void
+    *
+    */
+    void PreOrderTraversal(Node<T> *CurrentNode, PreOrderTraversalPtr Print) const ;
+    /**
+    *
+    *@fn Search(int Key, Node<T> *CurrentNode) const
+    *
+    *@brief The Searching of the Key
+    *
+    *
+    *This function performs the task of searching through the tree
+    *by its Key. The function will continue to search until the node is null
+    *or the key is found if the key is found in the tree returns true else
+    *returns false.
+    *
+    *
+    *@param Key - int data type
+    *@param CurrentNode - Node* of template class type
+    *@return bool
+    *
+    */
+    bool Search(int Key, Node<T> *CurrentNode) const;
+    /**
+    *
+    *@fn Delete(Node<T> *CurrentNode)
+    *
+    *@brief The Deleting of the tree.
+    *
+    *
+    *This function deletes the whole tree with the Post traversal concept
+    *it deletes the node by, severing the connection to the heap memory
+    *using the delete keyword and setting the node to nullptr.
+    *
+    *
+    *@param CurrentNode - Node* of template class type
+    *@return void
+    *
+    */
+    void Delete(Node<T> *CurrentNode);
+    /**
+    *
+    *@fn AssignVector(Node<T> * CurrentNode, int Key)
+    *
+    *@brief Assigning of Vector
+    *
+    *Search the tree with the Key and assign the Vector
+    *of that node with the same key to Vector<T> m_ReturnVec
+    *
+    *
+    *
+    *@param Key - int data type
+    *@param CurrentNode - Node* of template class type
+    *@return void
+    *
+    */
+    void AssignVector(Node<T> * CurrentNode, int Key);
+    /**
+    *
+    *@fn ReturnNode(int Key,Node<T>* CurrentNode)
+    *
+    *@brief Assigning the Node
+    *
+    *Search the tree with the Key when the node with the same
+    *key is found store the pointer of the node to Node<T> *m_FindNode
+    *
+    *
+    *
+    *@param Key - int data type
+    *@param CurrentNode - Node* of template class type
+    *@return void
+    *
+    */
+    void ReturnNode(int Key,Node<T>* CurrentNode);
+    /**
+    *
+    *@fn GetData(int & Data) const
+    *
+    *@brief Get the Key of the node
+    *
+    *It returns the value of the parameter, it is used when its traversing through tree.
+    *
+    *
+    *
+    *@param Data - int Reference
+    *@return int Reference
+    *
+    */
+    int& GetData(int & Data) const; //int& GetData(int & Data) const ;
+ 
+};
+//Default constructor
+template <class T>
+Bst<T>::Bst()
+{
+    m_Root = nullptr; // initialising the root
+}
+ 
+template <class T>
+Bst<T>::~Bst()
+{
+    // delete the whole tree.
+    Delete(m_Root);
+}
+ 
+template <class T>
+Vector<T> Bst<T>:: ReturnVec(int Key)
+{
+    AssignVector(m_Root, Key); // assigning the vector to m_ReturnVec
+    return m_ReturnVec; // return m_ReturnVec
+}
+ 
+template <class T>
+void Bst<T>::Insert(int Key,T DataObj)// search the key and store the data.
+{
+    if(m_Root !=nullptr) // if root not null
+    {
+        if(!Search(Key)) // if key not found
+        {
+            Insert(Key,m_Root,DataObj);
+        }
+        else // if key found
+        {
+            ReturnNode(Key,m_Root); // assigning m_FindNode to where address node of the found key.
+            m_FindNode ->YearsData.PushBack(DataObj); // insert the obj into the vector of the node.
+        }
+    }
+    else
+    {
+        // root is null
+        m_Root = new Node<T>;
+        m_Root -> Key = Key;
+        m_Root -> YearsData.PushBack(DataObj);
+        m_Root ->Left = nullptr;
+        m_Root ->Right = nullptr;
+    }
+ 
+ 
+}
+ 
+template <class T>
+bool Bst<T>:: Search(int Key) const
+{
+    if(m_Root!=nullptr) // if root not null
+    {
+        return Search(Key,m_Root); // call function to return true or false
+    }
+    else
+    {
+        return false; // else return false
+    }
+}
+ 
+ 
+template <class T>
+void Bst<T>::InOrderTraversal( InOrderTraversalPtr Print) const
+{
+    // print the inorder key to screen
+    InOrderTraversal(m_Root, Print);
+}
+ 
+template <class T>
+void Bst<T>::PostOrderTraversal(PostOrderTraversalPtr Print) const
+{
+    // print the postorder key to screen
+    PostOrderTraversal(m_Root,Print);
+}
+ 
+template <class T>
+void Bst<T>::PreOrderTraversal(PreOrderTraversalPtr Print) const
+{
+    // print the preorder key to screen
+    PreOrderTraversal(m_Root,Print);
+}
+ 
+template <class T>
+void Bst<T>:: Insert(int Key, Node<T> * CurrentNode,T DataObj)
+{
+    if(Key>CurrentNode->Key) // if entered key is bigger than root key
+    {
+        if(CurrentNode->Right !=nullptr) // check if node right pointer not null
+        {
+            Insert(Key,CurrentNode->Right,DataObj); // recursive with root become the right pointer
+        }
+        else
+        {
+            // if the right pointer is null create a new node and assign data and key
+            Node <T>* New_Node = new Node<T>;
+            New_Node -> Key = Key;
+            New_Node ->YearsData.PushBack(DataObj);
+            New_Node ->Left = nullptr;
+            New_Node ->Right = nullptr;
+            CurrentNode->Right = New_Node; // point new create node to currentNode right pointer
+        }
+    }
+    else // if key is not bigger than root key
+    {
+        if(CurrentNode->Left !=nullptr)// check if node left pointer not null
+        {
+            Insert(Key,CurrentNode->Left,DataObj);  // recursive with root become the left pointer
+        }
+        else
+        {
+            // if the left pointer is null create a new node and assign data and key
+            Node<T> * New_Node = new Node<T>;
+            New_Node->Key = Key;
+            New_Node ->YearsData.PushBack(DataObj);
+            New_Node ->Left = nullptr;
+            New_Node ->Right = nullptr;
+            CurrentNode->Left = New_Node; // point new create node to currentNode right pointer
+        }
+    }
+}
+ 
+ 
+template <class T>
+int& Bst<T>:: GetData(int& Data) const
+{
+    return Data; // return the parameter value
+}
+ 
+template <class T>
+void Bst<T>::InOrderTraversal(Node<T> * CurrentNode,InOrderTraversalPtr Print) const
+{
+    // recursive call
+    if (CurrentNode->Left !=nullptr) // if left pointer not null
+    {
+        InOrderTraversal(CurrentNode->Left,Print); // recursive till left pointer is null
+    }
+    Print(GetData(CurrentNode->Key)); // call the print ptr function with getdata function as parameter
+ 
+    if(CurrentNode->Right !=nullptr) // if right pointer not null
+    {
+        InOrderTraversal(CurrentNode->Right, Print); // recursive till right pointer is null
+    }
+}
+ 
+template <class T>
+void Bst<T>::PostOrderTraversal(Node<T> *CurrentNode,PostOrderTraversalPtr Print) const
+{
+    if (CurrentNode->Left!=nullptr) // if left pointer not null
+    {
+        PostOrderTraversal(CurrentNode->Left,Print);// recursive till left pointer is null
+    }
+    if (CurrentNode->Right!=nullptr)// if right pointer not null
+    {
+        PostOrderTraversal(CurrentNode->Right,Print);// recursive till right pointer is null
+    }
+    Print(GetData(CurrentNode->Key)); // call the print ptr function with getdata function as parameter
+}
+ 
+template <class T>
+void Bst<T>::PreOrderTraversal(Node<T> *CurrentNode,PreOrderTraversalPtr Print) const
+{
+ 
+    Print(GetData(CurrentNode->Key)); // call the print ptr function with getdata function as parameter
+    if (CurrentNode->Left!=nullptr) // if left pointer not null
+    {
+        PreOrderTraversal(CurrentNode->Left,Print); // recursive till left pointer is null
+    }
+    if (CurrentNode->Right!=nullptr)// if right pointer not null
+    {
+        PreOrderTraversal(CurrentNode->Right,Print); // recursive till right pointer is null
+    }
+}
+ 
+template <class T>
+bool Bst<T>::Search(int Key, Node<T> *CurrentNode) const
+{
+    if(CurrentNode == nullptr) // Current Node = nullptr
+    {
+        return false; //return false
+    }
+    else if(Key == CurrentNode->Key) // if key matches node key
+    {
+        return true; // return true
+    }
+    else if(Key>CurrentNode->Key) // if key is bigger than root node key
+    {
+        return Search(Key,CurrentNode->Right); // the root node points right pointer
+    }
+    else
+    {
+        // if key not bigger than root node key
+        return Search(Key,CurrentNode->Left); // root node points to left pointer
+    }
+}
+ 
+template <class T>
+void Bst<T>::AssignVector(Node<T> * CurrentNode, int Key)
+{
+    Vector<T> ReturnVec;
+    if(Key == CurrentNode->Key) // if key matches node key
+    {
+        m_ReturnVec = CurrentNode ->YearsData; //Assign the vector to m_ReturnVec
+    }
+    else if(Key>CurrentNode->Key) // if key is bigger than root node key
+    {
+        AssignVector(CurrentNode->Right,Key); // the root node points right pointer
+    }
+    else
+    {
+        // if key not bigger than root node key
+        AssignVector(CurrentNode->Left,Key);  // root node points to left pointer
+    }
+}
+ 
+template <class T>
+void Bst<T>::ReturnNode(int Key,Node<T>* CurrentNode)
+{
+    if(Key == CurrentNode->Key) // if key matches node key
+    {
+        m_FindNode = CurrentNode; //Assign the node pointer to m_FindNode
+    }
+    else if(Key>CurrentNode->Key) // if key is bigger than root node key
+    {
+        ReturnNode(Key,CurrentNode->Right); // the root node points right pointer
+    }
+    else
+    {
+        // if key not bigger than root node key
+        ReturnNode(Key,CurrentNode->Left); // root node points to left pointer
+    }
+}
+ 
+ 
+template <class T>
+void Bst<T>::Delete(Node<T>*CurrentNode)
+{
+    if(CurrentNode->Left!=nullptr)
+    {
+        Delete(CurrentNode->Left); //recursive till node left pointer is null
+    }
+    if(CurrentNode->Right!=nullptr)
+    {
+        Delete(CurrentNode->Right); // recursive till node right pointer is null
+    }
+    delete CurrentNode; // sever connection to heap memory with delete keyword
+    CurrentNode=nullptr; // set the node pointer to null.
+}
